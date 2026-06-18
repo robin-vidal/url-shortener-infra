@@ -1,0 +1,117 @@
+name: Infra
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.0"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      - name: Terraform init
+        run: terraform init
+
+      - name: Terraform format check
+        run: terraform fmt -check -recursive
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Checkov scan
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: .
+          framework: terraform
+          soft_fail: true
+
+      - name: Terraform plan
+        run: terraform plan -var="db_password=${{ secrets.DB_PASSWORD }}"
+
+      - name: Terraform apply
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: terraform apply -auto-approve -var="db_password=${{ secrets.DB_PASSWORD }}"
+
+  ansible:
+    runs-on: ubuntu-latest
+    needs: terraform
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Ansible
+        run: pip install ansible boto3 --break-system-packages
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      - name: Write SSH key
+        run: |
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/url-shortener-key.pem
+          chmod 400 /tmp/url-shortener-key.pem
+
+      - name: Get bastion IP
+        id: bastion
+        run: |
+          IP=$(aws ec2 describe-addresses \
+            --filters "Name=tag:Name,Values=url-shortener-bastion-eip" \
+            --query "Addresses[0].PublicIp" --output text)
+          echo "ip=$IP" >> $GITHUB_OUTPUT
+
+      - name: Get EC2 private IPs
+        id: hosts
+        run: |
+          BACKEND=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=url-shortener-backend" "Name=instance-state-name,Values=running" \
+            --query "Reservations[0].Instances[0].PrivateIpAddress" --output text)
+          FRONTEND=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=url-shortener-frontend" "Name=instance-state-name,Values=running" \
+            --query "Reservations[0].Instances[0].PrivateIpAddress" --output text)
+          echo "backend=$BACKEND" >> $GITHUB_OUTPUT
+          echo "frontend=$FRONTEND" >> $GITHUB_OUTPUT
+
+      - name: Get ECR URLs
+        id: ecr
+        run: |
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          echo "backend=${ACCOUNT}.dkr.ecr.us-east-1.amazonaws.com/url-shortener-backend" >> $GITHUB_OUTPUT
+          echo "frontend=${ACCOUNT}.dkr.ecr.us-east-1.amazonaws.com/url-shortener-frontend" >> $GITHUB_OUTPUT
+
+      - name: Set Ansible SSH args
+        run: |
+          echo "ANSIBLE_SSH_ARGS=-o StrictHostKeyChecking=no -o ProxyJump=ec2-user@${{ steps.bastion.outputs.ip }} -i /tmp/url-shortener-key.pem" >> $GITHUB_ENV
+
+      - name: Run Ansible playbook
+        working-directory: ansible
+        run: |
+          ansible-playbook playbook.yml \
+            -i "${{ steps.hosts.outputs.backend }}," \
+            -e "ecr_backend_url=${{ steps.ecr.outputs.backend }}" \
+            -e "ecr_frontend_url=${{ steps.ecr.outputs.frontend }}" \
+            --private-key /tmp/url-shortener-key.pem \
+            -u ec2-user

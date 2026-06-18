@@ -19,6 +19,26 @@ terraform init
 terraform apply -var="db_password=<PASSWORD>"
 ```
 
+## GitHub Actions secrets
+
+Required in `url-shortener-infra`:
+
+| Secret | Description |
+|--------|-------------|
+| `AWS_ACCESS_KEY_ID` | AWS Academy credentials |
+| `AWS_SECRET_ACCESS_KEY` | AWS Academy credentials |
+| `AWS_SESSION_TOKEN` | AWS Academy session token |
+| `DB_PASSWORD` | Password for the RDS Postgres instance |
+| `SSH_PRIVATE_KEY` | Contents of `url-shortener-key.pem` |
+
+Required in `url-shortener-backend` and `url-shortener-frontend`:
+
+| Secret | Description |
+|--------|-------------|
+| `AWS_ACCESS_KEY_ID` | AWS Academy credentials |
+| `AWS_SECRET_ACCESS_KEY` | AWS Academy credentials |
+| `AWS_SESSION_TOKEN` | AWS Academy session token |
+
 ## AWS Academy
 
-Credentials expire every 4h. Update them in `~/.aws/credentials` and in GitHub Actions secrets.
+Credentials expire every 4h. Set the three AWS secrets in each GitHub repo.

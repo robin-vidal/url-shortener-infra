@@ -7,7 +7,7 @@ terraform {
     }
   }
   backend "s3" {
-    bucket = "url-shortener-tfstate"
+    bucket = "url-shortener-tfstate-<ACCOUNT_ID>"
     key    = "terraform.tfstate"
     region = "us-east-1"
   }
@@ -68,6 +68,15 @@ module "alb" {
   alb_sg_id            = module.sg.alb_sg_id
   backend_instance_id  = module.ec2.backend_instance_id
   frontend_instance_id = module.ec2.frontend_instance_id
+}
+
+module "cloudwatch" {
+  source               = "./modules/cloudwatch"
+  project              = var.project
+  alb_arn_suffix       = module.alb.alb_arn_suffix
+  backend_instance_id  = module.ec2.backend_instance_id
+  frontend_instance_id = module.ec2.frontend_instance_id
+  db_identifier        = "${var.project}-db"
 }
 
 module "ssm" {

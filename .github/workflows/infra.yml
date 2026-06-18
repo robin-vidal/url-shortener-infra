@@ -118,11 +118,21 @@ jobs:
         run: |
           echo "ANSIBLE_SSH_ARGS=-o StrictHostKeyChecking=no -o ProxyJump=ec2-user@${{ steps.bastion.outputs.ip }} -i /tmp/url-shortener-key.pem" >> $GITHUB_ENV
 
+      - name: Generate inventory
+        run: |
+          cat > /tmp/inventory.ini << EOF
+          [backend]
+          ${{ steps.hosts.outputs.backend }}
+
+          [frontend]
+          ${{ steps.hosts.outputs.frontend }}
+          EOF
+
       - name: Run Ansible playbook
         working-directory: ansible
         run: |
           ansible-playbook playbook.yml \
-            -i "${{ steps.hosts.outputs.backend }}," \
+            -i /tmp/inventory.ini \
             -e "ecr_backend_url=${{ steps.ecr.outputs.backend }}" \
             -e "ecr_frontend_url=${{ steps.ecr.outputs.frontend }}" \
             --private-key /tmp/url-shortener-key.pem \

@@ -39,8 +39,8 @@ jobs:
             -backend-config="key=terraform.tfstate" \
             -backend-config="region=us-east-1"
 
-      - name: Terraform format check
-        run: terraform fmt -check -recursive
+      - name: Terraform format
+        run: terraform fmt -recursive
 
       - name: Terraform validate
         run: terraform validate

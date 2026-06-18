@@ -114,9 +114,23 @@ jobs:
           echo "backend=${ACCOUNT}.dkr.ecr.us-east-1.amazonaws.com/url-shortener-backend" >> $GITHUB_OUTPUT
           echo "frontend=${ACCOUNT}.dkr.ecr.us-east-1.amazonaws.com/url-shortener-frontend" >> $GITHUB_OUTPUT
 
-      - name: Set Ansible SSH args
+      - name: Configure SSH
         run: |
-          echo "ANSIBLE_SSH_ARGS=-o StrictHostKeyChecking=no -o ProxyJump=ec2-user@${{ steps.bastion.outputs.ip }} -i /tmp/url-shortener-key.pem" >> $GITHUB_ENV
+          mkdir -p ~/.ssh
+          cat > ~/.ssh/config << EOF
+          Host bastion
+            HostName ${{ steps.bastion.outputs.ip }}
+            User ec2-user
+            IdentityFile /tmp/url-shortener-key.pem
+            StrictHostKeyChecking no
+
+          Host 10.0.*.*
+            User ec2-user
+            IdentityFile /tmp/url-shortener-key.pem
+            StrictHostKeyChecking no
+            ProxyJump bastion
+          EOF
+          chmod 600 ~/.ssh/config
 
       - name: Generate inventory
         run: |
@@ -135,5 +149,4 @@ jobs:
             -i /tmp/inventory.ini \
             -e "ecr_backend_url=${{ steps.ecr.outputs.backend }}" \
             -e "ecr_frontend_url=${{ steps.ecr.outputs.frontend }}" \
-            --private-key /tmp/url-shortener-key.pem \
             -u ec2-user

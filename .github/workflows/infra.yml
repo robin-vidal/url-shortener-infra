@@ -28,8 +28,16 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: us-east-1
 
+      - name: Get account ID
+        id: account
+        run: echo "id=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_OUTPUT
+
       - name: Terraform init
-        run: terraform init
+        run: |
+          terraform init \
+            -backend-config="bucket=url-shortener-tfstate-${{ steps.account.outputs.id }}" \
+            -backend-config="key=terraform.tfstate" \
+            -backend-config="region=us-east-1"
 
       - name: Terraform format check
         run: terraform fmt -check -recursive

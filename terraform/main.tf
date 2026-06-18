@@ -6,11 +6,7 @@ terraform {
       version = "~> 5.0"
     }
   }
-  backend "s3" {
-    bucket = "url-shortener-tfstate-<ACCOUNT_ID>"
-    key    = "terraform.tfstate"
-    region = "us-east-1"
-  }
+  backend "s3" {}
 }
 
 provider "aws" {

@@ -16,7 +16,7 @@ chmod 400 url-shortener-key.pem
 ```bash
 cd terraform/
 terraform init
-terraform apply -var="db_password=<PASSWORD>"
+TF_VAR_db_password=<PASSWORD> terraform apply
 ```
 
 ## GitHub Actions secrets

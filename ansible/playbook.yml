@@ -3,7 +3,6 @@
   become: true
   tasks:
     - name: Install Docker
-      amazon.aws.aws_ssm:
       yum:
         name:
           - docker
